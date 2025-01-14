@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         uCertify Auto Card
+// @name         Auto_Card
 // @namespace    http://tampermonkey.net/
 // @version      1.1
 // @description  Enable and auto-click the "Correct" button on uCertify flash card pages
