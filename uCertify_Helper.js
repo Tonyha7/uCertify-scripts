@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         uCertify Helper
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Enjoy your study
 // @match        *.ucertify.com/*
 // @grant        none
@@ -73,8 +73,8 @@
     function createControlPanel() {
         const panel = document.createElement('div');
         panel.style.position = 'fixed';
-        panel.style.top = '10px';
-        panel.style.right = '10px';
+        panel.style.width = '200px';
+        panel.style.height = '150px';
         panel.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
         panel.style.color = 'white';
         panel.style.padding = '10px';
@@ -122,7 +122,7 @@
         dragIcon.style.right = '10px';
         dragIcon.style.width = '40px';
         dragIcon.style.height = '40px';
-        dragIcon.style.backgroundImage = 'url(https://pub-32b6722f0bae40a5bac9b010e1164363.r2.dev/sliver__wolf_playing.jpg)';
+        dragIcon.style.backgroundImage = 'url(https://rcdn.tonyha7.com/sliver__wolf_playing.jpg)';
         dragIcon.style.backgroundSize = 'cover';
         dragIcon.style.backgroundPosition = 'center';
         dragIcon.style.borderRadius = '50%';
@@ -139,7 +139,11 @@
         });
 
         dragIcon.addEventListener('click', () => {
-            panel.style.display = 'block';
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+            } else {
+                panel.style.display = 'block';
+            }
         });
 
         let isDragging = false;
