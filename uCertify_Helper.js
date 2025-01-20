@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         uCertify Helper
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Enjoy your study
 // @match        *.ucertify.com/*
 // @grant        GM_xmlhttpRequest
