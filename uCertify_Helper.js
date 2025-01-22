@@ -15,6 +15,7 @@
 
     let enableAutoCard = false;
     let enableMarkAsRead = false;
+    let useAzureOpenAI = GM_getValue('use_azure_openai', false);
 
     function debounce(func, wait) {
         let timeout;
@@ -183,8 +184,8 @@
 
     // Function to get search suggestions from GPT
     async function getSearchSuggestions(title, question, options) {
-        const apiUrl = GM_getValue('openai_api_url');
-        const apiKey = GM_getValue('openai_api_key');
+        const apiUrl = useAzureOpenAI ? GM_getValue('azure_openai_endpoint') + `/openai/deployments/${GM_getValue('azure_openai_deployment_id')}/completions?api-version=${GM_getValue('azure_openai_api_version')}` : GM_getValue('openai_api_url');
+        const apiKey = GM_getValue('openai_api_key'); // API key is used for both OpenAI and Azure OpenAI for simplicity, adjust if needed.
         const apimodel = GM_getValue('openai_api_model');
 
         let prompt;
@@ -197,25 +198,42 @@
         console.log('Prompt for search suggestions:', prompt);
 
         try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            };
+            if (useAzureOpenAI) {
+                delete headers['Authorization']; // Azure OpenAI uses API Key in header name 'api-key'
+                headers['api-key'] = apiKey;
+            }
+
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
+                headers: headers,
                 body: JSON.stringify({
-                    model: apimodel,
-                    messages: [
+                    ...(useAzureOpenAI ? {prompt: [prompt], max_tokens: 100} : {model: apimodel, messages: [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": prompt}
-                    ]
+                    ]})
                 })
             });
             const data = await response.json();
             console.log('Search suggestions API Response:', data);
 
-            if (data.choices && data.choices.length > 0) {
-                return data.choices[0].message.content.trim();
+            let content = '';
+            if (useAzureOpenAI) {
+                if (data.choices && data.choices.length > 0) {
+                    content = data.choices[0].text.trim();
+                }
+            } else {
+                if (data.choices && data.choices.length > 0) {
+                    content = data.choices[0].message.content.trim();
+                }
+            }
+
+
+            if (content) {
+                return content;
             } else {
                 console.error('No search suggestions found in API response');
                 return 'No search suggestions found';
@@ -228,8 +246,8 @@
 
     // Function to get answer from GPT with search results
     async function getChatGPTAnswerWithSearchResults(title, question, options, searchResults) {
-        const apiUrl = GM_getValue('openai_api_url');
-        const apiKey = GM_getValue('openai_api_key');
+        const apiUrl = useAzureOpenAI ? GM_getValue('azure_openai_endpoint') + `/openai/deployments/${GM_getValue('azure_openai_deployment_id')}/completions?api-version=${GM_getValue('azure_openai_api_version')}` : GM_getValue('openai_api_url');
+        const apiKey = GM_getValue('openai_api_key'); // API key is used for both OpenAI and Azure OpenAI for simplicity, adjust if needed.
         const apimodel = GM_getValue('openai_api_model');
 
         let prompt;
@@ -242,26 +260,41 @@
         console.log('Prompt for final answer:', prompt);
 
         try {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            };
+            if (useAzureOpenAI) {
+                delete headers['Authorization']; // Azure OpenAI uses API Key in header name 'api-key'
+                headers['api-key'] = apiKey;
+            }
+
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
+                headers: headers,
                 body: JSON.stringify({
-                    model: apimodel,
-                    messages: [
+                    ...(useAzureOpenAI ? {prompt: [prompt], max_tokens: 1000} : {model: apimodel, messages: [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": prompt}
-                    ],
-                    max_tokens: 1000
+                    ], max_tokens: 1000})
                 })
             });
             const data = await response.json();
             console.log('Final answer API Response:', data);
 
-            if (data.choices && data.choices.length > 0) {
-                return data.choices[0].message.content.trim();
+            let content = '';
+            if (useAzureOpenAI) {
+                if (data.choices && data.choices.length > 0) {
+                    content = data.choices[0].text.trim();
+                }
+            } else {
+                if (data.choices && data.choices.length > 0) {
+                    content = data.choices[0].message.content.trim();
+                }
+            }
+
+            if (content) {
+                return content;
             } else {
                 console.error('No choices found in API response');
                 return 'No answer found';
@@ -322,8 +355,8 @@
         panel.style.position = 'fixed';
         panel.style.top = '10px';
         panel.style.right = '10px';
-        panel.style.width = '300px';
-        panel.style.height = '300px';
+        panel.style.width = '320px'; // Wider panel to accommodate Azure settings
+        panel.style.height = 'auto'; // Adjust height dynamically
         panel.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
         panel.style.color = 'white';
         panel.style.padding = '10px';
@@ -331,6 +364,37 @@
         panel.style.zIndex = '10000';
         panel.style.fontSize = '14px';
         panel.style.display = 'none'; // Initially hidden
+
+
+        const azureToggleLabel = document.createElement('label');
+        azureToggleLabel.innerHTML = `Use Azure OpenAI: <input type="checkbox" id="azureOpenAICheckbox" ${useAzureOpenAI ? 'checked' : ''}>`;
+        azureToggleLabel.style.display = 'block';
+        azureToggleLabel.style.marginBottom = '5px';
+
+        const azureEndpointInput = document.createElement('input');
+        azureEndpointInput.type = 'text';
+        azureEndpointInput.placeholder = 'Azure Endpoint';
+        azureEndpointInput.style.width = '100%';
+        azureEndpointInput.style.marginBottom = '5px';
+        azureEndpointInput.value = GM_getValue('azure_openai_endpoint', '');
+        azureEndpointInput.style.display = useAzureOpenAI ? 'block' : 'none';
+
+        const azureDeploymentIdInput = document.createElement('input');
+        azureDeploymentIdInput.type = 'text';
+        azureDeploymentIdInput.placeholder = 'Azure Deployment ID';
+        azureDeploymentIdInput.style.width = '100%';
+        azureDeploymentIdInput.style.marginBottom = '5px';
+        azureDeploymentIdInput.value = GM_getValue('azure_openai_deployment_id', '');
+        azureDeploymentIdInput.style.display = useAzureOpenAI ? 'block' : 'none';
+
+        const azureApiVersionInput = document.createElement('input');
+        azureApiVersionInput.type = 'text';
+        azureApiVersionInput.placeholder = 'Azure API Version';
+        azureApiVersionInput.style.width = '100%';
+        azureApiVersionInput.style.marginBottom = '10px';
+        azureApiVersionInput.value = GM_getValue('azure_openai_api_version', '2024-12-01-preview');
+        azureApiVersionInput.style.display = useAzureOpenAI ? 'block' : 'none';
+
 
         const autoCardToggle = document.createElement('label');
         autoCardToggle.innerHTML = `Auto Card: <input type="checkbox" ${enableAutoCard ? 'checked' : ''}>`;
@@ -357,6 +421,7 @@
         apiURLInput.style.width = '100%';
         apiURLInput.style.marginBottom = '5px';
         apiURLInput.value = GM_getValue('openai_api_url', 'https://api.openai.com/v1/chat/completions');
+        apiURLInput.style.display = useAzureOpenAI ? 'none' : 'block';
 
         const apiKeyInput = document.createElement('input');
         apiKeyInput.type = 'text';
@@ -378,6 +443,7 @@
             }
             apiModelSelect.appendChild(option);
         });
+        apiModelSelect.style.display = useAzureOpenAI ? 'none' : 'block';
 
         const saveButton = document.createElement('button');
         saveButton.textContent = 'Save Settings';
@@ -391,15 +457,39 @@
             GM_setValue('openai_api_url', apiURLInput.value);
             GM_setValue('openai_api_key', apiKeyInput.value);
             GM_setValue('openai_api_model', apiModelSelect.value);
-            alert('OpenAI settings saved!');
+            GM_setValue('use_azure_openai', useAzureOpenAICheckbox.checked);
+            if (useAzureOpenAICheckbox.checked) {
+                GM_setValue('azure_openai_endpoint', azureEndpointInput.value);
+                GM_setValue('azure_openai_deployment_id', azureDeploymentIdInput.value);
+                GM_setValue('azure_openai_api_version', azureApiVersionInput.value);
+            }
+            alert('Settings saved!');
         });
 
+        const useAzureOpenAICheckbox = azureToggleLabel.querySelector('input');
+        useAzureOpenAICheckbox.addEventListener('change', (e) => {
+            useAzureOpenAI = e.target.checked;
+            GM_setValue('use_azure_openai', useAzureOpenAI);
+            azureEndpointInput.style.display = useAzureOpenAI ? 'block' : 'none';
+            azureDeploymentIdInput.style.display = useAzureOpenAI ? 'block' : 'none';
+            azureApiVersionInput.style.display = useAzureOpenAI ? 'block' : 'none';
+            apiURLInput.style.display = useAzureOpenAI ? 'none' : 'block';
+            apiModelSelect.style.display = useAzureOpenAI ? 'none' : 'block';
+        });
+
+
+        panel.appendChild(azureToggleLabel);
+        panel.appendChild(azureEndpointInput);
+        panel.appendChild(azureDeploymentIdInput);
+        panel.appendChild(azureApiVersionInput);
+        panel.appendChild(document.createElement('hr'));
         panel.appendChild(autoCardToggle);
         panel.appendChild(markAsReadToggle);
         panel.appendChild(apiURLInput);
         panel.appendChild(apiKeyInput);
         panel.appendChild(apiModelSelect);
         panel.appendChild(saveButton);
+
 
         document.body.appendChild(panel);
 
